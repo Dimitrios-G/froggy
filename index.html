@@ -4221,10 +4221,10 @@ function bumpMission(kind, amount){
   });
   if (changed){ persist(); paintBadges(); }
 }
-var CHEST_AT = [1, 2, 4];   // 1 = the daily claim, then the weeklies carry you
+var CHEST_AT = [2, 3, 5];   // 2 = both daily claims, then the weeklies
 function chestClaimedCount(){
   // weeklies help, but only up to three: the last chest wants a full day
-  return (save.claimedToday | 0) + Math.min(3, save.claimedWeek | 0);
+  return Math.min(DAILY_CLAIM_CAP, save.claimedToday | 0) + Math.min(3, save.claimedWeek | 0);
 }
 var CHEST_REWARD = [
   {label:"150 coins + 1 power up",          coins:150, power:1},
@@ -4284,10 +4284,8 @@ function claimWeekly(i){
   if (m.claimed || m.got < m.goal) return;
   payMission(m);
   save.claimedWeek = (save.claimedWeek | 0) + 1;
-  var f = freshMission(save.weekMissions, save.claimedWeek);
-  f.goal *= 4; f.coins *= 3;
-  f.text = f.text.replace(/\d+/, f.goal);
-  save.weekMissions[i] = f;
+  save.weekMissions[i] = {k:"rest", goal:1, got:0, claimed:1, coins:0, power:0,
+                          text:"Done for this week!"};
   persist(); paintWallet(); paintPowers(); buildMissions(); SFX.win();
 }
 
@@ -4296,19 +4294,17 @@ function claimWeekly(i){
 function sweepClaimed(){
   var changed = false;
   (save.missions || []).forEach(function(m, i){
-    if (m.claimed){
+    if (m.claimed && m.k !== "rest"){
       save.claimedToday = (save.claimedToday | 0) + 1;
       save.missions[i] = freshMission(save.missions, save.claimedToday);
       changed = true;
     }
   });
   (save.weekMissions || []).forEach(function(m, i){
-    if (m.claimed){
+    if (m.claimed && m.k !== "rest"){
       save.claimedWeek = (save.claimedWeek | 0) + 1;
-      var f = freshMission(save.weekMissions, save.claimedWeek);
-      f.goal *= 4; f.coins *= 3;
-      f.text = f.text.replace(/\d+/, f.goal);
-      save.weekMissions[i] = f;
+      save.weekMissions[i] = {k:"rest", goal:1, got:0, claimed:1, coins:0, power:0,
+                              text:"Done for this week!"};
       changed = true;
     }
   });
@@ -4332,13 +4328,13 @@ function buildMissions(){
   renderMissionList($("missList"), save.missions, claimMission);
 
   var claimed = chestClaimedCount();
-  $("chestFill").style.width = Math.min(100, Math.round(claimed / 4 * 100)) + "%";
+  $("chestFill").style.width = Math.min(100, Math.round(claimed / 5 * 100)) + "%";
   var cbBar = $("chestFill").parentNode;
   Array.prototype.slice.call(cbBar.querySelectorAll(".cstar")).forEach(function(e){ e.remove(); });
   CHEST_AT.forEach(function(at, ci){
     var st = document.createElement("b");
     st.className = "cstar";
-    st.style.left = Math.round(at / 4 * 100) + "%";
+    st.style.left = Math.round(at / 5 * 100) + "%";
     st.innerHTML = starSvg(!!save.chests[ci] || claimed >= at);
     cbBar.appendChild(st);
   });
@@ -4396,7 +4392,7 @@ function payMission(m){
   save.coins += (m.coins || 0);
 }
 
-var DAILY_CLAIM_CAP = 1;
+var DAILY_CLAIM_CAP = 2;
 function claimMission(i){
   var m = save.missions[i];
   if (m.claimed || m.got < m.goal) return;
