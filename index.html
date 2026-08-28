@@ -4221,7 +4221,7 @@ function bumpMission(kind, amount){
   });
   if (changed){ persist(); paintBadges(); }
 }
-var CHEST_AT = [3, 5, 6];   // 3 = all dailies, 5 = +2 weeklies, 6 = everything
+var CHEST_AT = [1, 2, 4];   // 1 = the daily claim, then the weeklies carry you
 function chestClaimedCount(){
   // weeklies help, but only up to three: the last chest wants a full day
   return (save.claimedToday | 0) + Math.min(3, save.claimedWeek | 0);
@@ -4256,6 +4256,15 @@ function renderMissionList(el, list, claimFn, weekly){
     d.appendChild(t);
     var c = document.createElement("div");
     var ready = m.got >= m.goal && !m.claimed;
+    var capped = !weekly && ready && (save.claimedToday | 0) >= DAILY_CLAIM_CAP;
+    if (capped){
+      c = document.createElement("div");
+      c.className = "claim off";
+      c.textContent = "TOMORROW";
+      d.appendChild(c);
+      el.appendChild(d);
+      return;
+    }
     c.className = "claim" + (m.claimed ? " done" : ready ? "" : " off");
     c.innerHTML = m.claimed ? "✓ DONE" :
       (m.power
@@ -4323,13 +4332,13 @@ function buildMissions(){
   renderMissionList($("missList"), save.missions, claimMission);
 
   var claimed = chestClaimedCount();
-  $("chestFill").style.width = Math.min(100, Math.round(claimed / 6 * 100)) + "%";
+  $("chestFill").style.width = Math.min(100, Math.round(claimed / 4 * 100)) + "%";
   var cbBar = $("chestFill").parentNode;
   Array.prototype.slice.call(cbBar.querySelectorAll(".cstar")).forEach(function(e){ e.remove(); });
   CHEST_AT.forEach(function(at, ci){
     var st = document.createElement("b");
     st.className = "cstar";
-    st.style.left = Math.round(at / 6 * 100) + "%";
+    st.style.left = Math.round(at / 4 * 100) + "%";
     st.innerHTML = starSvg(!!save.chests[ci] || claimed >= at);
     cbBar.appendChild(st);
   });
@@ -4387,10 +4396,14 @@ function payMission(m){
   save.coins += (m.coins || 0);
 }
 
-var DAILY_CLAIM_CAP = 3;
+var DAILY_CLAIM_CAP = 1;
 function claimMission(i){
   var m = save.missions[i];
   if (m.claimed || m.got < m.goal) return;
+  if ((save.claimedToday | 0) >= DAILY_CLAIM_CAP){
+    floatToast("Daily reward taken — come back tomorrow!");
+    SFX.bad(); return;
+  }
   payMission(m);
   save.claimedToday = (save.claimedToday | 0) + 1;
   // the bar resets: a brand new mission takes the old one's seat,
