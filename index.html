@@ -2027,7 +2027,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 73;
+var GAME_BUILD = 74;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -4209,6 +4209,9 @@ function bumpMission(kind, amount){
   var changed = false;
   [save.missions, save.weekMissions].forEach(function(list){
     if (!list) return;
+    // a capped day means the dailies stop moving and stop celebrating
+    if (list === save.missions &&
+        (save.claimedToday | 0) >= DAILY_CLAIM_CAP) return;
     list.forEach(function(m){
       if (m.k === kind && m.got < m.goal){
         m.got = Math.min(m.goal, m.got + (amount || 1));
@@ -4998,6 +5001,8 @@ function rewardsWaiting(){
   var n = 0;
   [save.missions, save.weekMissions].forEach(function(list){
     if (!list) return;
+    if (list === save.missions &&
+        (save.claimedToday | 0) >= DAILY_CLAIM_CAP) return;
     list.forEach(function(m){ if (m.got >= m.goal && !m.claimed) n++; });
   });
   if (save.missions){
@@ -5014,10 +5019,11 @@ function paintHomeTicker(){
   rollMissions(); rollWeekly();
   if (typeof sweepClaimed === "function") sweepClaimed();
   var waiting = rewardsWaiting();
+  var capped = (save.claimedToday | 0) >= DAILY_CLAIM_CAP;
   var next = null;
-  [save.missions, save.weekMissions].forEach(function(list){
+  [capped ? null : save.missions, save.weekMissions].forEach(function(list){
     (list || []).forEach(function(m){
-      if (!next && !m.claimed && m.got < m.goal) next = m;
+      if (!next && !m.claimed && m.k !== "rest" && m.got < m.goal) next = m;
     });
   });
   if (waiting > 0){
@@ -5034,8 +5040,11 @@ function paintHomeTicker(){
     $("htBar").style.width = Math.round(next.got / next.goal * 100) + "%";
     $("htPay").innerHTML = '<img src="' + COIN_SRC + '" alt="">' + next.coins;
   } else {
-    el.style.display = "none";
-    return;
+    el.className = "hticker";
+    $("htTitle").textContent = "MISSIONS DONE";
+    $("htText").textContent = "New missions tomorrow — nice work!";
+    $("htBar").parentNode.style.display = "none";
+    $("htPay").textContent = "✓";
   }
   el.style.display = "flex";
 }
