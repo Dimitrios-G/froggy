@@ -2075,6 +2075,7 @@ var save = (function(){
       offerDay: s.offerDay || "",
       claimedToday: s.claimedToday | 0,
       chestModel: s.chestModel | 0,
+      chestProg: s.chestProg | 0,
       claimedWeek: s.claimedWeek | 0,
       boosters: s.boosters || {star:1, wave:1, hammer:1, life:1, boost:1, ball:1}
     };
@@ -2082,7 +2083,7 @@ var save = (function(){
     return {coins:250, gems:12, lives:5, livesAt:0, level:1, stars:{}, seen:{}, skin:"classic", skins:["classic"],
             missionDay:"", missions:null, chests:[0,0,0], dailyDay:"", dailyStreak:0, audioBuild:0, musicVol:40, sfxVol:100, muted:0,
             followers:0, volFixed:0, rankClaimed:0, weekKey:"", weekMissions:null, feed:[], playerName:"", best:0,
-            outfits:[], worn:{}, looks:[], look:"classic", feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:2, boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
+            outfits:[], worn:{}, looks:[], look:"classic", feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
   }
 })();
 function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(save)); }catch(e){} }
@@ -4178,7 +4179,6 @@ function rollMissions(){
   save.missionDay = day;
   save.missions = picked;
   save.missionPoints = 0;
-  save.chests = [0,0,0];
   save.claimedToday = 0;
   persist();
 }
@@ -4201,6 +4201,8 @@ function rollWeekly(){
   save.weekKey = wk;
   save.weekMissions = picked;
   save.claimedWeek = 0;
+  save.chests = [0,0,0];
+  save.chestProg = 0;
   persist();
 }
 function bumpMission(kind, amount){
@@ -4221,10 +4223,9 @@ function bumpMission(kind, amount){
   });
   if (changed){ persist(); paintBadges(); }
 }
-var CHEST_AT = [2, 3, 5];   // 2 = both daily claims, then the weeklies
+var CHEST_AT = [6, 11, 16]; // a whole week of claims fills the third chest
 function chestClaimedCount(){
-  // weeklies help, but only up to three: the last chest wants a full day
-  return Math.min(DAILY_CLAIM_CAP, save.claimedToday | 0) + Math.min(3, save.claimedWeek | 0);
+  return save.chestProg | 0;   // every claim of the week, daily or weekly
 }
 var CHEST_REWARD = [
   {label:"150 coins + 1 power up",          coins:150, power:1},
@@ -4284,6 +4285,7 @@ function claimWeekly(i){
   if (m.claimed || m.got < m.goal) return;
   payMission(m);
   save.claimedWeek = (save.claimedWeek | 0) + 1;
+  save.chestProg = (save.chestProg | 0) + 1;
   save.weekMissions[i] = {k:"rest", goal:1, got:0, claimed:1, coins:0, power:0,
                           text:"Done for this week!"};
   persist(); paintWallet(); paintPowers(); buildMissions(); SFX.win();
@@ -4296,6 +4298,7 @@ function sweepClaimed(){
   (save.missions || []).forEach(function(m, i){
     if (m.claimed && m.k !== "rest"){
       save.claimedToday = (save.claimedToday | 0) + 1;
+      save.chestProg = (save.chestProg | 0) + 1;
       save.missions[i] = freshMission(save.missions, save.claimedToday);
       changed = true;
     }
@@ -4303,6 +4306,7 @@ function sweepClaimed(){
   (save.weekMissions || []).forEach(function(m, i){
     if (m.claimed && m.k !== "rest"){
       save.claimedWeek = (save.claimedWeek | 0) + 1;
+      save.chestProg = (save.chestProg | 0) + 1;
       save.weekMissions[i] = {k:"rest", goal:1, got:0, claimed:1, coins:0, power:0,
                               text:"Done for this week!"};
       changed = true;
@@ -4315,9 +4319,10 @@ function buildMissions(){
   rollMissions();
   rollWeekly();
   sweepClaimed();
-  if (save.chestModel !== 2){
-    save.chestModel = 2;
+  if (save.chestModel !== 3){
+    save.chestModel = 3;
     save.chests = [0, 0, 0];
+    save.chestProg = 0;
     persist();
   }
   renderMissionList($("weekList"), save.weekMissions, claimWeekly, true);
@@ -4328,13 +4333,13 @@ function buildMissions(){
   renderMissionList($("missList"), save.missions, claimMission);
 
   var claimed = chestClaimedCount();
-  $("chestFill").style.width = Math.min(100, Math.round(claimed / 5 * 100)) + "%";
+  $("chestFill").style.width = Math.min(100, Math.round(claimed / 16 * 100)) + "%";
   var cbBar = $("chestFill").parentNode;
   Array.prototype.slice.call(cbBar.querySelectorAll(".cstar")).forEach(function(e){ e.remove(); });
   CHEST_AT.forEach(function(at, ci){
     var st = document.createElement("b");
     st.className = "cstar";
-    st.style.left = Math.round(at / 5 * 100) + "%";
+    st.style.left = Math.round(at / 16 * 100) + "%";
     st.innerHTML = starSvg(!!save.chests[ci] || claimed >= at);
     cbBar.appendChild(st);
   });
@@ -4402,6 +4407,7 @@ function claimMission(i){
   }
   payMission(m);
   save.claimedToday = (save.claimedToday | 0) + 1;
+  save.chestProg = (save.chestProg | 0) + 1;
   // the bar resets: a brand new mission takes the old one's seat,
   // until the day's six claims are spent
   save.missions[i] = save.claimedToday >= DAILY_CLAIM_CAP
@@ -5573,7 +5579,7 @@ all(".tab").forEach(function(t){
                  dailyDay:"", dailyStreak:0, musicStep:2, volFixed:2,
                  musicVol:25, sfxVol:100, muted:0, audioBuild:AUDIO_BUILD,
                  weekKey:"", weekMissions:null, playerName:"", best:0, outfits:[], worn:{}, looks:[], look:"classic",
-                 rankClaimed:0, followers:0, best:0, feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:2,
+                 rankClaimed:0, followers:0, best:0, feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0,
                  boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
     Object.keys(save).forEach(function(k){ delete save[k]; });
     Object.keys(fresh).forEach(function(k){ save[k] = fresh[k]; });
