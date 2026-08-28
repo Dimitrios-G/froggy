@@ -2027,7 +2027,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 72;
+var GAME_BUILD = 73;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -4136,12 +4136,12 @@ function wardAct(){
    MISSIONS - three daily jobs plus a chest track, reset every day
    ===================================================================== */
 var MISSION_POOL = [
-  {k:"clear",  text:"Clear %n levels",           goal:[2,3,4],      coins:120},
-  {k:"tiles",  text:"Smash %n tiles",            goal:[120,180,260], coins:150},
-  {k:"combo",  text:"Make %n combos",            goal:[4,6,8],      coins:0, power:2},
-  {k:"frogs",  text:"Collect %n froglets",       goal:[40,60,90],   coins:160},
-  {k:"power",  text:"Use %n power ups",          goal:[3,5,7],      coins:180},
-  {k:"stars",  text:"Earn %n stars",             goal:[4,6,9],      coins:200}
+  {k:"clear",  text:"Clear %n levels",           goal:[4,6,8],       coins:120},
+  {k:"tiles",  text:"Smash %n tiles",            goal:[200,300,420], coins:150},
+  {k:"combo",  text:"Make %n combos",            goal:[8,12,16],     coins:0, power:1},
+  {k:"frogs",  text:"Collect %n froglets",       goal:[80,120,170],  coins:160},
+  {k:"power",  text:"Use %n power ups",          goal:[6,9,12],      coins:180},
+  {k:"stars",  text:"Earn %n stars",             goal:[8,12,16],     coins:200}
 ];
 function todayKey(){
   var d = new Date();
@@ -4171,7 +4171,7 @@ function rollMissions(){
     while (used[idx]) idx = (idx + 1) % MISSION_POOL.length;
     used[idx] = 1;
     var m = MISSION_POOL[idx];
-    var tier = Math.min(2, Math.floor(save.level / 60));
+    var tier = Math.min(2, Math.floor(save.level / 40));
     picked.push({k:m.k, goal:m.goal[tier], coins:m.coins, power:m.power || 0,
                  got:0, claimed:0, text:m.text.replace("%n", m.goal[tier])});
   }
@@ -4194,7 +4194,7 @@ function rollWeekly(){
     while (used[idx]) idx = (idx + 1) % MISSION_POOL.length;
     used[idx] = 1;
     var m = MISSION_POOL[idx];
-    var tier = Math.min(2, Math.floor(save.level / 60));
+    var tier = Math.min(2, Math.floor(save.level / 40));
     picked.push({k:m.k, goal:m.goal[tier] * 6, coins:m.coins * 4, power:m.power ? m.power * 2 : 0,
                  got:0, claimed:0, text:m.text.replace("%n", m.goal[tier] * 6)});
   }
@@ -4221,9 +4221,10 @@ function bumpMission(kind, amount){
   });
   if (changed){ persist(); paintBadges(); }
 }
-var CHEST_AT = [3, 6, 10];  // claimed missions (daily AND weekly together)
+var CHEST_AT = [3, 5, 6];   // 3 = all dailies, 5 = +2 weeklies, 6 = everything
 function chestClaimedCount(){
-  return (save.claimedToday | 0) + (save.claimedWeek | 0);
+  // weeklies help, but only up to three: the last chest wants a full day
+  return (save.claimedToday | 0) + Math.min(3, save.claimedWeek | 0);
 }
 var CHEST_REWARD = [
   {label:"150 coins + 1 power up",          coins:150, power:1},
@@ -4322,13 +4323,13 @@ function buildMissions(){
   renderMissionList($("missList"), save.missions, claimMission);
 
   var claimed = chestClaimedCount();
-  $("chestFill").style.width = Math.min(100, Math.round(claimed / 10 * 100)) + "%";
+  $("chestFill").style.width = Math.min(100, Math.round(claimed / 6 * 100)) + "%";
   var cbBar = $("chestFill").parentNode;
   Array.prototype.slice.call(cbBar.querySelectorAll(".cstar")).forEach(function(e){ e.remove(); });
   CHEST_AT.forEach(function(at, ci){
     var st = document.createElement("b");
     st.className = "cstar";
-    st.style.left = Math.round(at / 10 * 100) + "%";
+    st.style.left = Math.round(at / 6 * 100) + "%";
     st.innerHTML = starSvg(!!save.chests[ci] || claimed >= at);
     cbBar.appendChild(st);
   });
@@ -4359,10 +4360,10 @@ function freshMission(list, round){
   var pick = MISSION_POOL.filter(function(x){ return !used[x.k]; });
   if (!pick.length) pick = MISSION_POOL;
   var m = pick[(Math.random() * pick.length) | 0];
-  var tier = Math.min(2, Math.floor(save.level / 60));
+  var tier = Math.min(2, Math.floor(save.level / 40));
   // the pay keeps growing round after round, the goal barely does:
   // bars must fill fast enough to feel alive
-  var payMult  = 1 + 0.5 * (round || 0);
+  var payMult  = Math.min(2, 1 + 0.5 * (round || 0));
   var goalMult = Math.min(1.5, 1 + 0.15 * (round || 0));
   var goal = Math.round(m.goal[tier] * goalMult);
   return {k:m.k, goal:goal, coins:Math.round(m.coins * payMult / 10) * 10,
@@ -4386,13 +4387,18 @@ function payMission(m){
   save.coins += (m.coins || 0);
 }
 
+var DAILY_CLAIM_CAP = 3;
 function claimMission(i){
   var m = save.missions[i];
   if (m.claimed || m.got < m.goal) return;
   payMission(m);
   save.claimedToday = (save.claimedToday | 0) + 1;
-  // the bar resets: a brand new mission takes the old one's seat
-  save.missions[i] = freshMission(save.missions, save.claimedToday);
+  // the bar resets: a brand new mission takes the old one's seat,
+  // until the day's six claims are spent
+  save.missions[i] = save.claimedToday >= DAILY_CLAIM_CAP
+    ? {k:"rest", goal:1, got:0, claimed:1, coins:0, power:0,
+       text:"All done for today — come back tomorrow!"}
+    : freshMission(save.missions, save.claimedToday);
   persist(); paintWallet(); paintPowers(); buildMissions(); SFX.power();
 }
 function claimChest(i){
@@ -4437,10 +4443,10 @@ function tickMissionTimer(){
 var RANKS = [
   {at:0,       name:"Pond Nobody",   col:"#8A97AB", reward:null},
   {at:2000,    name:"Local Legend",  col:"#4FC3F7", reward:{coins:300},              rlabel:"300 coins"},
-  {at:10000,   name:"Rising Star",   col:"#3FD34A", reward:{everyPower:1},           rlabel:"+1 every power up"},
+  {at:10000,   name:"Rising Star",   col:"#3FD34A", reward:{power:2},                rlabel:"2 random power ups"},
   {at:40000,   name:"Verified Frog", col:"#FFC93C", reward:{gems:5},                 rlabel:"5 gems"},
   {at:120000,  name:"Trending",      col:"#FF9DAA", reward:{coins:800},              rlabel:"800 coins"},
-  {at:350000,  name:"Viral Icon",    col:"#C08BFF", reward:{everyPower:2},           rlabel:"+2 every power up"},
+  {at:350000,  name:"Viral Icon",    col:"#C08BFF", reward:{power:3},                rlabel:"3 random power ups"},
   {at:1000000, name:"Hall of Fame",  col:"#FFB800", reward:{gems:20, coins:2000},    rlabel:"2000 coins + 20 gems"}
 ];
 
@@ -4463,10 +4469,10 @@ $("btnClaimRank").addEventListener("click", function(){
   if (r.reward){
     if (r.reward.coins) save.coins += r.reward.coins;
     if (r.reward.gems)  save.gems  += r.reward.gems;
-    if (r.reward.everyPower)
-      Object.keys(save.boosters).forEach(function(k){
-        save.boosters[k] += r.reward.everyPower;
-      });
+    for (var rp = 0; rp < (r.reward.power || 0); rp++){
+      var rks = Object.keys(save.boosters);
+      save.boosters[rks[(Math.random() * rks.length) | 0]] += 1;
+    }
   }
   save.rankClaimed = claimed;
   persist(); paintWallet(); paintBadges();
@@ -5198,7 +5204,7 @@ function feastLoop(ts){
   if (F.t <= 0){ endFeast(); return; }
   $("bzTime").textContent = Math.ceil(F.t);
   F.goldAt -= dt;
-  if (F.goldAt <= 0 && F.goldSpawned < 2){
+  if (F.goldAt <= 0 && F.goldSpawned < 1){
     feastSpawn(true); F.goldSpawned++;
     F.goldAt = 12 + Math.random()*5;
   }
