@@ -1450,6 +1450,7 @@ input[type=range]::-moz-range-thumb{
       <div class="goalgrid" id="stGoals"></div>
       <div class="sub" id="stMoves" style="margin-top:12px">20 moves</div>
       <div class="stmiss" id="stMissions"></div>
+      <div class="btn small yellow" id="btnBoost" style="margin-bottom:8px"><span>+1 power up — 400 <img data-art="coins" alt="" style="width:17px;height:17px;vertical-align:-3px"></span></div>
       <div class="btn" id="btnGo"><span>Start</span></div>
       <div class="ghost" id="btnBackMap">Back to map</div>
     </div>
@@ -1581,6 +1582,15 @@ input[type=range]::-moz-range-thumb{
       <div class="sub" id="stoText"></div>
       <div class="unlockrow"><svg width="24" height="24" viewBox="0 -960 960 960" fill="#122A47"><path d="M160-280v80h640v-80H160Zm0-440h88q-5-9-6.5-19t-1.5-21q0-50 35-85t85-35q30 0 55.5 15.5T460-826l20 26 20-26q18-24 44-39t56-15q50 0 85 35t35 85q0 11-1.5 21t-6.5 19h88q33 0 56.5 23.5T880-640v440q0 33-23.5 56.5T800-120H160q-33 0-56.5-23.5T80-200v-440q0-33 23.5-56.5T160-720Zm0 320h640v-240H596l84 114-64 46-136-184-136 184-64-46 82-114H160v240Zm228.5-331.5Q400-743 400-760t-11.5-28.5Q377-800 360-800t-28.5 11.5Q320-777 320-760t11.5 28.5Q343-720 360-720t28.5-11.5ZM600-720q17 0 28.5-11.5T640-760q0-17-11.5-28.5T600-800q-17 0-28.5 11.5T560-760q0 17 11.5 28.5T600-720Z"/></svg><b id="stoUnlock"></b></div>
       <div class="btn" id="btnStoryOk"><span>Nice</span></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="ovContinue">
+    <div class="panel">
+      <h2>So close!</h2>
+      <div class="sub" id="contSub">Only 3 to go!</div>
+      <div class="btn gold" id="btnContinueYes"><span>+5 moves — 5 <img data-art="gems" alt="" style="width:18px;height:18px;vertical-align:-3px"></span></div>
+      <div class="ghost" id="btnContinueNo">Give up</div>
     </div>
   </div>
 
@@ -2027,7 +2037,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 77;
+var GAME_BUILD = 78;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -3373,7 +3383,19 @@ function checkEnd(b){
     }
     b.over = true; setTimeout(function(){ finish(b, true); }, 450); return;
   }
-  if (b.moves <= 0){ b.over = true; setTimeout(function(){ finish(b, false); }, 450); return; }
+  if (b.moves <= 0){
+    var needT = 0, gotT = 0;
+    b.need.forEach(function(g){ needT += g.n; gotT += Math.min(g.n, g.got); });
+    if (!b.contOffered && save.gems >= 5 && needT > 0 && gotT / needT >= 0.7){
+      b.contOffered = 1;
+      b.busy = true;
+      $("contSub").textContent = "Only " + (needT - gotT) +
+        " to go — don't lose the take!";
+      setTimeout(function(){ $("ovContinue").classList.add("on"); }, 450);
+      return;
+    }
+    b.over = true; setTimeout(function(){ finish(b, false); }, 450); return;
+  }
 }
 
 function finish(b, won){
@@ -5269,6 +5291,7 @@ function openLevel(){
     });
   }
 
+  $("btnBoost").style.opacity = save.coins >= 400 ? "1" : ".5";
   $("ovStart").classList.add("on");
 }
 
@@ -5794,6 +5817,34 @@ all(".tab").forEach(function(t){
     show("wardrobe"); buildWardrobe(); markNav("WARDROBE"); SFX.button();
   });
   $("wardAction").addEventListener("click", wardAct);
+  $("btnContinueYes").addEventListener("click", function(){
+    var b = B;
+    if (!b){ $("ovContinue").classList.remove("on"); return; }
+    if (save.gems < 5){ floatToast("Not enough gems"); SFX.bad(); return; }
+    save.gems -= 5; persist(); paintWallet();
+    b.moves += 5; paintMoves(b);
+    $("ovContinue").classList.remove("on");
+    b.busy = false;
+    floatToast("+5 moves — go get it!");
+    SFX.win(); render();
+  });
+  $("btnContinueNo").addEventListener("click", function(){
+    $("ovContinue").classList.remove("on");
+    var b = B;
+    if (b){ b.over = true; finish(b, false); }
+    SFX.button();
+  });
+  $("btnBoost").addEventListener("click", function(){
+    if (save.coins < 400){ floatToast("Not enough coins"); SFX.bad(); return; }
+    save.coins -= 400;
+    var bks = Object.keys(save.boosters);
+    var bk = bks[(Math.random() * bks.length) | 0];
+    save.boosters[bk] += 1;
+    persist(); paintWallet();
+    floatToast("+1 " + powerLabel(bk) + " in your bag!");
+    SFX.power();
+    startLevel();
+  });
   $("btnChestOk").addEventListener("click", function(){
     $("ovChest").classList.remove("on"); SFX.button();
   });
