@@ -2027,14 +2027,14 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 75;
+var GAME_BUILD = 76;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
     var s = JSON.parse(localStorage.getItem(KEY) || "{}");
     return {
-      coins: s.coins == null ? 250 : s.coins,
-      gems:  s.gems  == null ? 12  : s.gems,
+      coins: s.coins == null ? 0 : s.coins,
+      gems:  s.gems  == null ? 0  : s.gems,
       lives: s.lives == null ? 5   : s.lives,
       livesAt: s.livesAt || 0,
       level: s.level || 1,
@@ -2081,7 +2081,7 @@ var save = (function(){
       boosters: s.boosters || {star:1, wave:1, hammer:1, life:1, boost:1, ball:1}
     };
   }catch(e){
-    return {coins:250, gems:12, lives:5, livesAt:0, level:1, stars:{}, seen:{}, skin:"classic", skins:["classic"],
+    return {coins:0, gems:0, lives:5, livesAt:0, level:1, stars:{}, seen:{}, skin:"classic", skins:["classic"],
             missionDay:"", missions:null, chests:[0,0,0], dailyDay:"", dailyStreak:0, audioBuild:0, musicVol:40, sfxVol:100, muted:0,
             followers:0, volFixed:0, rankClaimed:0, weekKey:"", weekMissions:null, feed:[], playerName:"", best:0,
             outfits:[], worn:{}, looks:[], look:"classic", feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:1, boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
@@ -2097,7 +2097,7 @@ if (save.powerModel !== 1){
   persist();
 }
 
-var LIFE_MS = 5*60*1000, MAX_LIVES = 5;
+var LIFE_MS = 30*60*1000, MAX_LIVES = 5;
 function refreshLives(){
   if (save.lives >= MAX_LIVES){ save.livesAt = 0; return; }
   if (!save.livesAt) save.livesAt = Date.now();
@@ -2151,20 +2151,28 @@ function makeLevel(n){
 
   // sticky honey squats on the set from level 80; it thickens with the
   // climb and doubles up from 180. Clean cells win levels now.
-  var honey = 0, honeyLayers = 1;
+  var honey = 0, honeyLayers = 1, ice = 0;
   if (n >= 80){
-    honey = Math.min(16, 6 + Math.floor((n - 80) / 12));
-    if (n >= 180) honeyLayers = 2;
-    if (n % 5 === 0 && n % 10 !== 0) honey = Math.max(4, honey - 3);
+    if (n % 2 === 0){
+      ice = Math.min(10, 5 + Math.floor((n - 80) / 20));
+    } else {
+      honey = Math.min(16, 6 + Math.floor((n - 80) / 12));
+      if (n >= 180) honeyLayers = 2;
+      if (n % 5 === 0) honey = Math.max(4, honey - 3);
+    }
+  } else if (n >= 60){
+    // the pond freezes over: tiles locked in ice, break them free
+    ice = Math.min(8, 4 + Math.floor((n - 60) / 8));
   } else if (n >= 25){
-    // a light taste of trouble long before the thick stuff
     honey = Math.min(6, 3 + Math.floor((n - 25) / 18));
   }
   if (honey) goals.push({t:"h", n:honey * honeyLayers});
+  if (ice) goals.push({t:"i", n:ice});
 
   return {
     honey: honey,
     honeyLayers: honeyLayers,
+    ice: ice,
     n: n,
     name: LEVEL_NAMES[i % LEVEL_NAMES.length],
     chapter: Math.floor(i / 30) + 1,
@@ -2224,6 +2232,18 @@ function tileThumb(type, size){
   c.dataset.tile = type;
   var g = c.getContext("2d");
   g.setTransform(2,0,0,2,0,0);
+  if (type === "i"){
+    var u2 = size;
+    g.fillStyle = "rgba(180,225,255,.95)";
+    g.strokeStyle = "#2B6FA8"; g.lineWidth = u2*0.07;
+    roundRect(g, u2*0.14, u2*0.14, u2*0.72, u2*0.72, u2*0.16);
+    g.fill(); g.stroke();
+    g.strokeStyle = "rgba(255,255,255,.9)"; g.lineWidth = u2*0.05;
+    g.beginPath();
+    g.moveTo(u2*0.3, u2*0.32); g.lineTo(u2*0.58, u2*0.5); g.lineTo(u2*0.48, u2*0.72);
+    g.stroke();
+    return c;
+  }
   if (type === "h"){
     var u = size;
     g.fillStyle = "#F5A623";
@@ -2381,6 +2401,21 @@ function makeBoard(level){
   var guard=0;
   while (!hasMove(b) && guard++<50) reshuffle(b);
 
+  if (level.ice){
+    b.ice = [];
+    for (var ir = 0; ir < ROWS; ir++){
+      b.ice[ir] = [];
+      for (var ic2 = 0; ic2 < COLS; ic2++) b.ice[ir][ic2] = 0;
+    }
+    var iseed = (level.n * 48271 + 7) % 2147483647;
+    function irand(){ iseed = (iseed * 16807) % 2147483647; return iseed / 2147483647; }
+    var iput = 0, iguard = 0;
+    while (iput < level.ice && iguard++ < 400){
+      var zr = (irand() * ROWS) | 0, zc = (irand() * COLS) | 0;
+      if (b.ice[zr][zc]) continue;
+      b.ice[zr][zc] = 1; iput++;
+    }
+  }
   if (level.honey){
     b.honey = [];
     for (var hr = 0; hr < ROWS; hr++){
@@ -2479,6 +2514,39 @@ function reshuffle(b){
 }
 
 /* ---------- clearing ---------- */
+// ice eats the hit and keeps the tile; honey melts under it.
+// returns true when the tile itself must SURVIVE this clear.
+function hitObstacle(b, r, c){
+  if (b.ice && b.ice[r] && b.ice[r][c] > 0){
+    b.ice[r][c]--;
+    countGoal(b, "i");
+    for (var ib = 0; ib < 7; ib++){
+      var ia = Math.random() * 6.283;
+      b.fx.push({kind:"bit", x:ox+c*cell+cell/2, y:oy+r*cell+cell/2,
+                 vx:Math.cos(ia)*3.4, vy:Math.sin(ia)*3.4 - 2,
+                 col:"#BFE8FF", r:2.5 + Math.random()*3, life:.8});
+    }
+    return true;
+  }
+  if (b.honey && b.honey[r] && b.honey[r][c] > 0){
+    b.honey[r][c]--;
+    countGoal(b, "h");
+    for (var hb = 0; hb < 6; hb++){
+      var ha = Math.random() * 6.283;
+      b.fx.push({kind:"bit", x:ox+c*cell+cell/2, y:oy+r*cell+cell/2,
+                 vx:Math.cos(ha)*3, vy:Math.sin(ha)*3 - 2,
+                 col:"#FFB53C", r:2.5 + Math.random()*3, life:.85});
+    }
+  }
+  return false;
+}
+function payPrize(b, r, c){
+  if (b.g[r][c] && b.g[r][c].prize){
+    save.gems += 1; persist(); paintWallet();
+    floatText(b, ox+c*cell+cell/2, oy+r*cell+cell/2, "+1 GEM!", "#C08BFF");
+    SFX.golden();
+  }
+}
 function countGoal(b,t){
   var inc = (todayTrend().tile === t) ? 2 : 1;   // the daily trend doubles its tile
   b.need.forEach(function(g){ if (g.t===t) g.got = Math.min(g.n, g.got+inc); });
@@ -2598,21 +2666,8 @@ function resolve(b, done){
   keys.forEach(function(key){
     var pr = key.split(","), r = +pr[0], c = +pr[1];
     if (!inside(r,c) || !b.g[r][c]) return;
-    if (b.honey && b.honey[r] && b.honey[r][c] > 0){
-      b.honey[r][c]--;
-      countGoal(b, "h");
-      for (var hb = 0; hb < 6; hb++){
-        var ha = Math.random() * 6.283;
-        b.fx.push({kind:"bit", x:ox+c*cell+cell/2, y:oy+r*cell+cell/2,
-                   vx:Math.cos(ha)*3, vy:Math.sin(ha)*3 - 2,
-                   col:"#FFB53C", r:2.5 + Math.random()*3, life:.85});
-      }
-    }
-    if (b.g[r][c].prize){
-      save.gems += 1; persist(); paintWallet();
-      floatText(b, ox+c*cell+cell/2, oy+r*cell+cell/2, "+1 GEM!", "#C08BFF");
-      SFX.golden();
-    }
+    if (hitObstacle(b, r, c)) return;
+    payPrize(b, r, c);
     var t = b.g[r][c].t;
     if (t === 0) bumpMission("frogs", 1);
     countGoal(b, t);
@@ -2662,7 +2717,7 @@ function collapse(b){
       b.g[r2][c] = newTile((Math.random()*NCOL)|0);
       b.g[r2][c].dy = (write-r2+1)*cell + cell;
       // a rare glinting tile carries a real gem from level 40 on
-      if (b.level && b.level.n >= 40 && Math.random() < 0.0015)
+      if (b.level && b.level.n >= 40 && Math.random() < 0.003)
         b.g[r2][c].prize = 1;
     }
   }
@@ -2826,6 +2881,9 @@ function fireCombo(b, kind, r, c, colourA, colourB){
   keys.forEach(function(k){
     var pr = k.split(","), rr = +pr[0], cc = +pr[1];
     if (!b.g[rr][cc]) return;
+    if (hitObstacle(b, rr, cc)) return;
+    payPrize(b, rr, cc);
+    if (b.g[rr][cc].t === 0) bumpMission("frogs", 1);
     countGoal(b, b.g[rr][cc].t);
     b.fx.push({x:ox+cc*cell+cell/2, y:oy+rr*cell+cell/2,
                t:b.g[rr][cc].t, life:.34, kind:"pop"});
@@ -2990,6 +3048,12 @@ function trySwap(r1,c1,r2,c2){
 
   // two specials swapped together: run the combination instead of a match
   if (a.sp && d.sp){
+    if (b.ice && (b.ice[r1][c1] || b.ice[r2][c2])){
+      SFX.bad();
+      floatText(b, W/2, H*0.4, "FROZEN!", "#BFE8FF");
+      render();
+      return;
+    }
     var kind = comboKind(a.sp, d.sp);
     if (kind === "fly_tongue" || kind === "fly_bomb"){
       b.busy = true; b.moves--; paintMoves(b); SFX.swap();
@@ -3402,7 +3466,7 @@ function finish(b, won){
     grantBeat(beat);
     setTimeout(function(){ openStory(beat); }, 900);
   }
-  if (won) feastPending = feastDue();
+  feastPending = won ? feastDue() : 0;
   $("ovEnd").classList.add("on");
   if (!won && save.lives <= 0){
     setTimeout(function(){ $("ovEnd").classList.remove("on"); openLives(); }, 1400);
@@ -3501,6 +3565,18 @@ function paint(){
         cell*0.40*t.scale*(sel?1.14:1)*pulse, t.scale, t.sp);
     }
     cx.shadowBlur = 0;
+    if (b.ice && b.ice[r2] && b.ice[r2][c2] > 0){
+      var zx = ox + c2*cell, zy = oy + r2*cell - t.dy;
+      cx.fillStyle = "rgba(200,235,255,.5)";
+      roundRect(cx, zx+2, zy+2, cell-4, cell-4, 9); cx.fill();
+      cx.strokeStyle = "rgba(255,255,255,.85)"; cx.lineWidth = 2.5;
+      roundRect(cx, zx+3, zy+3, cell-6, cell-6, 8); cx.stroke();
+      cx.strokeStyle = "rgba(160,210,240,.9)"; cx.lineWidth = 1.5;
+      cx.beginPath();
+      cx.moveTo(zx+cell*0.25, zy+cell*0.3); cx.lineTo(zx+cell*0.55, zy+cell*0.5);
+      cx.lineTo(zx+cell*0.45, zy+cell*0.75);
+      cx.stroke();
+    }
     if (t.prize){
       var gpx = ox + c2*cell + cell/2, gpy = oy + r2*cell + cell/2 - t.dy;
       cx.save();
@@ -4872,21 +4948,8 @@ function detonateAt(b, r, c){
   keys.forEach(function(key){
     var pr = key.split(","), rr = +pr[0], cc = +pr[1];
     if (!b.g[rr][cc]) return;
-    if (b.honey && b.honey[rr] && b.honey[rr][cc] > 0){
-      b.honey[rr][cc]--;
-      countGoal(b, "h");
-      for (var hb = 0; hb < 6; hb++){
-        var ha = Math.random() * 6.283;
-        b.fx.push({kind:"bit", x:ox+cc*cell+cell/2, y:oy+rr*cell+cell/2,
-                   vx:Math.cos(ha)*3, vy:Math.sin(ha)*3 - 2,
-                   col:"#FFB53C", r:2.5 + Math.random()*3, life:.85});
-      }
-    }
-    if (b.g[rr][cc].prize){
-      save.gems += 1; persist(); paintWallet();
-      floatText(b, ox+cc*cell+cell/2, oy+rr*cell+cell/2, "+1 GEM!", "#C08BFF");
-      SFX.golden();
-    }
+    if (hitObstacle(b, rr, cc)) return;
+    payPrize(b, rr, cc);
     var tt = b.g[rr][cc].t;
     countGoal(b, tt);                    // goals count here too, not only
     if (tt === 0) bumpMission("frogs", 1);   // in ordinary matches
@@ -5668,7 +5731,7 @@ all(".tab").forEach(function(t){
     try{ localStorage.removeItem(KEY); }catch(e){}
     // reload() is dead inside a WebView fed inline HTML, so the reset
     // happens in place: same save object, fresh values, repainted UI
-    var fresh = {coins:250, gems:12, lives:5, livesAt:0, level:1, stars:{}, seen:{},
+    var fresh = {coins:0, gems:0, lives:5, livesAt:0, level:1, stars:{}, seen:{},
                  sawHelp:0, skin:"classic", skins:["classic"],
                  missionDay:"", missions:null, chests:[0,0,0],
                  dailyDay:"", dailyStreak:0, musicStep:2, volFixed:2,
