@@ -2027,7 +2027,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 76;
+var GAME_BUILD = 77;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -2084,15 +2084,15 @@ var save = (function(){
     return {coins:0, gems:0, lives:5, livesAt:0, level:1, stars:{}, seen:{}, skin:"classic", skins:["classic"],
             missionDay:"", missions:null, chests:[0,0,0], dailyDay:"", dailyStreak:0, audioBuild:0, musicVol:40, sfxVol:100, muted:0,
             followers:0, volFixed:0, rankClaimed:0, weekKey:"", weekMissions:null, feed:[], playerName:"", best:0,
-            outfits:[], worn:{}, looks:[], look:"classic", feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:1, boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
+            outfits:[], worn:{}, looks:[], look:"classic", feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:2, boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
   }
 })();
 function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(save)); }catch(e){} }
 // the old faucets left mountains of power ups: one-time trim to 2 each
-if (save.powerModel !== 1){
-  save.powerModel = 1;
+if (save.powerModel !== 2){
+  save.powerModel = 2;
   Object.keys(save.boosters || {}).forEach(function(k){
-    save.boosters[k] = Math.min(2, save.boosters[k] | 0);
+    save.boosters[k] = Math.min(1, save.boosters[k] | 0);
   });
   persist();
 }
@@ -4037,6 +4037,10 @@ function buyChest(o){
     : 250 + ((Math.random() * 250) | 0);
   save.coins += coinLoot;
   lines.push(["Coins", "+" + coinLoot]);
+  if (o.k === "golden" && Math.random() < 0.35){
+    save.gems += 5;
+    lines.push(["BONUS gems", "+5"]);
+  }
   persist(); paintWallet(); paintPowers(); buildShop();
   openChestOv(lines);
 }
@@ -4388,9 +4392,9 @@ function chestClaimedCount(){
   return save.chestProg | 0;   // every claim of the week, daily or weekly
 }
 var CHEST_REWARD = [
-  {label:"200 coins + 1 power up",  coins:200, power:1},
-  {label:"400 coins + 2 power ups", coins:400, power:2},
-  {label:"800 coins + 3 power ups", coins:800, power:3}
+  {label:"200 coins + 1 power up",           coins:200, power:1},
+  {label:"400 coins + 1 gem + 2 power ups",  coins:400, gems:1, power:2},
+  {label:"800 coins + 3 gems + 3 power ups", coins:800, gems:3, power:3}
 ];
 function missionIcon(k, weekly){
   if (k === "clear") return weekly ? MICONS.stairs : MICONS.frog1;
@@ -5737,7 +5741,7 @@ all(".tab").forEach(function(t){
                  dailyDay:"", dailyStreak:0, musicStep:2, volFixed:2,
                  musicVol:25, sfxVol:100, muted:0, audioBuild:AUDIO_BUILD,
                  weekKey:"", weekMissions:null, playerName:"", best:0, outfits:[], worn:{}, looks:[], look:"classic",
-                 rankClaimed:0, followers:0, best:0, feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:1,
+                 rankClaimed:0, followers:0, best:0, feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:2,
                  boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
     Object.keys(save).forEach(function(k){ delete save[k]; });
     Object.keys(fresh).forEach(function(k){ save[k] = fresh[k]; });
