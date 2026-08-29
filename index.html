@@ -2027,7 +2027,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 74;
+var GAME_BUILD = 75;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -2076,6 +2076,7 @@ var save = (function(){
       claimedToday: s.claimedToday | 0,
       chestModel: s.chestModel | 0,
       chestProg: s.chestProg | 0,
+      powerModel: s.powerModel | 0,
       claimedWeek: s.claimedWeek | 0,
       boosters: s.boosters || {star:1, wave:1, hammer:1, life:1, boost:1, ball:1}
     };
@@ -2083,10 +2084,18 @@ var save = (function(){
     return {coins:250, gems:12, lives:5, livesAt:0, level:1, stars:{}, seen:{}, skin:"classic", skins:["classic"],
             missionDay:"", missions:null, chests:[0,0,0], dailyDay:"", dailyStreak:0, audioBuild:0, musicVol:40, sfxVol:100, muted:0,
             followers:0, volFixed:0, rankClaimed:0, weekKey:"", weekMissions:null, feed:[], playerName:"", best:0,
-            outfits:[], worn:{}, looks:[], look:"classic", feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
+            outfits:[], worn:{}, looks:[], look:"classic", feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:1, boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
   }
 })();
 function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(save)); }catch(e){} }
+// the old faucets left mountains of power ups: one-time trim to 2 each
+if (save.powerModel !== 1){
+  save.powerModel = 1;
+  Object.keys(save.boosters || {}).forEach(function(k){
+    save.boosters[k] = Math.min(2, save.boosters[k] | 0);
+  });
+  persist();
+}
 
 var LIFE_MS = 5*60*1000, MAX_LIVES = 5;
 function refreshLives(){
@@ -2147,6 +2156,9 @@ function makeLevel(n){
     honey = Math.min(16, 6 + Math.floor((n - 80) / 12));
     if (n >= 180) honeyLayers = 2;
     if (n % 5 === 0 && n % 10 !== 0) honey = Math.max(4, honey - 3);
+  } else if (n >= 25){
+    // a light taste of trouble long before the thick stuff
+    honey = Math.min(6, 3 + Math.floor((n - 25) / 18));
   }
   if (honey) goals.push({t:"h", n:honey * honeyLayers});
 
@@ -2596,6 +2608,11 @@ function resolve(b, done){
                    col:"#FFB53C", r:2.5 + Math.random()*3, life:.85});
       }
     }
+    if (b.g[r][c].prize){
+      save.gems += 1; persist(); paintWallet();
+      floatText(b, ox+c*cell+cell/2, oy+r*cell+cell/2, "+1 GEM!", "#C08BFF");
+      SFX.golden();
+    }
     var t = b.g[r][c].t;
     if (t === 0) bumpMission("frogs", 1);
     countGoal(b, t);
@@ -2644,6 +2661,9 @@ function collapse(b){
     for (var r2=write;r2>=0;r2--){
       b.g[r2][c] = newTile((Math.random()*NCOL)|0);
       b.g[r2][c].dy = (write-r2+1)*cell + cell;
+      // a rare glinting tile carries a real gem from level 40 on
+      if (b.level && b.level.n >= 40 && Math.random() < 0.0015)
+        b.g[r2][c].prize = 1;
     }
   }
 }
@@ -2684,6 +2704,52 @@ function comboKind(a, b){
   if ((x === 1 || x === 2) && y === 4) return "tongue_bomb";
   if ((x === 1 || x === 2) && (y === 1 || y === 2)) return "tongue_tongue";
   return null;
+}
+
+// the storm in two acts: every tile of the colour TURNS INTO the
+// special first, one by one, and then they all fire in a chain
+function fireStorm(b, kind, r, c, colourA, colourB){
+  var colour = (colourA === 3 || colourA === colourB) ? colourB : colourA;
+  var spots = [];
+  for (var rr = 0; rr < ROWS; rr++) for (var cc = 0; cc < COLS; cc++){
+    var t = b.g[rr][cc];
+    if (t && t.t === colour && !t.sp) spots.push([rr, cc]);
+  }
+  function wrapUp(extra){
+    setTimeout(function(){
+      collapse(b); render();
+      setTimeout(function(){
+        resolve(b, function(){ b.busy = false; render(); checkEnd(b); });
+      }, 260);
+    }, extra);
+  }
+  if (!spots.length){ wrapUp(80); return; }
+
+  floatText(b, W/2, H*0.32,
+    kind === "fly_tongue" ? "TONGUE STORM!" : "BOMB STORM!", "#FFC93C");
+  SFX.golden();
+  b.shake = Math.max(b.shake || 0, 6);
+
+  spots.forEach(function(pos, i){
+    setTimeout(function(){
+      var t = b.g[pos[0]][pos[1]];
+      if (t && t.t === colour && !t.sp){
+        t.sp = kind === "fly_tongue" ? (i % 2 ? 2 : 1) : 4;
+        t.scale = 0.25;
+        SFX.tap();
+        render();
+      }
+    }, 75 * i);
+  });
+
+  var convDone = 75 * spots.length + 380;
+  spots.forEach(function(pos, i){
+    setTimeout(function(){
+      if (b.g[pos[0]][pos[1]]) detonateAt(b, pos[0], pos[1]);
+      render();
+    }, convDone + 140 * i);
+  });
+  wrapUp(convDone + 140 * spots.length + 320);
 }
 
 // runs a combination centred on r,c using the two colours involved
@@ -2925,6 +2991,13 @@ function trySwap(r1,c1,r2,c2){
   // two specials swapped together: run the combination instead of a match
   if (a.sp && d.sp){
     var kind = comboKind(a.sp, d.sp);
+    if (kind === "fly_tongue" || kind === "fly_bomb"){
+      b.busy = true; b.moves--; paintMoves(b); SFX.swap();
+      var sca = a.t, scb = d.t;
+      b.g[r1][c1] = null; b.g[r2][c2] = null;
+      fireStorm(b, kind, r2, c2, sca, scb);
+      return;
+    }
     if (kind){
       b.busy = true; b.moves--; paintMoves(b); SFX.swap();
       var ca = a.t, cb = d.t;
@@ -3428,6 +3501,18 @@ function paint(){
         cell*0.40*t.scale*(sel?1.14:1)*pulse, t.scale, t.sp);
     }
     cx.shadowBlur = 0;
+    if (t.prize){
+      var gpx = ox + c2*cell + cell/2, gpy = oy + r2*cell + cell/2 - t.dy;
+      cx.save();
+      cx.strokeStyle = "#C08BFF"; cx.lineWidth = 3;
+      cx.shadowColor = "#C08BFF";
+      cx.shadowBlur = 10 + 6 * Math.sin(pulseNow / 160);
+      cx.beginPath(); cx.arc(gpx, gpy, cell*0.44, 0, 6.283); cx.stroke();
+      cx.restore();
+      var gi = fimg(GEM_SRC);
+      if (gi.complete && gi.naturalWidth)
+        cx.drawImage(gi, gpx + cell*0.10, gpy - cell*0.48, cell*0.34, cell*0.34);
+    }
     if (sel){
       cx.globalAlpha = 0.65 + 0.35 * Math.sin(pulseNow / 140);
       cx.strokeStyle = "#fff"; cx.lineWidth = 3.5;
@@ -3876,10 +3961,6 @@ function buyChest(o){
     : 250 + ((Math.random() * 250) | 0);
   save.coins += coinLoot;
   lines.push(["Coins", "+" + coinLoot]);
-  if (o.k === "golden" && Math.random() < 0.25){
-    save.gems += 5;
-    lines.push(["BONUS gems", "+5"]);
-  }
   persist(); paintWallet(); paintPowers(); buildShop();
   openChestOv(lines);
 }
@@ -4167,7 +4248,7 @@ function rollMissions(){
   // pick three, seeded off the date so everyone gets the same set that day
   var seed = day.split("-").reduce(function(a,b){ return a + (+b); }, 0);
   var picked = [], used = {};
-  for (var i = 0; i < 3; i++){
+  for (var i = 0; i < 2; i++){
     var idx = (seed * (i + 3) + i * 5) % MISSION_POOL.length;
     while (used[idx]) idx = (idx + 1) % MISSION_POOL.length;
     used[idx] = 1;
@@ -4231,9 +4312,9 @@ function chestClaimedCount(){
   return save.chestProg | 0;   // every claim of the week, daily or weekly
 }
 var CHEST_REWARD = [
-  {label:"150 coins + 1 power up",          coins:150, power:1},
-  {label:"300 coins + 2 power ups",         coins:300, power:2},
-  {label:"500 coins + 3 gems + 2 power ups", coins:500, gems:3, power:2}
+  {label:"200 coins + 1 power up",  coins:200, power:1},
+  {label:"400 coins + 2 power ups", coins:400, power:2},
+  {label:"800 coins + 3 power ups", coins:800, power:3}
 ];
 function missionIcon(k, weekly){
   if (k === "clear") return weekly ? MICONS.stairs : MICONS.frog1;
@@ -4800,6 +4881,11 @@ function detonateAt(b, r, c){
                    vx:Math.cos(ha)*3, vy:Math.sin(ha)*3 - 2,
                    col:"#FFB53C", r:2.5 + Math.random()*3, life:.85});
       }
+    }
+    if (b.g[rr][cc].prize){
+      save.gems += 1; persist(); paintWallet();
+      floatText(b, ox+cc*cell+cell/2, oy+rr*cell+cell/2, "+1 GEM!", "#C08BFF");
+      SFX.golden();
     }
     var tt = b.g[rr][cc].t;
     countGoal(b, tt);                    // goals count here too, not only
@@ -5588,7 +5674,7 @@ all(".tab").forEach(function(t){
                  dailyDay:"", dailyStreak:0, musicStep:2, volFixed:2,
                  musicVol:25, sfxVol:100, muted:0, audioBuild:AUDIO_BUILD,
                  weekKey:"", weekMissions:null, playerName:"", best:0, outfits:[], worn:{}, looks:[], look:"classic",
-                 rankClaimed:0, followers:0, best:0, feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0,
+                 rankClaimed:0, followers:0, best:0, feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:1,
                  boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
     Object.keys(save).forEach(function(k){ delete save[k]; });
     Object.keys(fresh).forEach(function(k){ save[k] = fresh[k]; });
@@ -5613,12 +5699,12 @@ all(".tab").forEach(function(t){
 (function(){
   var GIFTS = [
     {label:"100 coins",   coins:100},
-    {label:"1 Pinball",   power:"ball"},
     {label:"200 coins",   coins:200},
     {label:"1 life",      lives:1},
-    {label:"2 gems",      gems:2},
-    {label:"1 Star Blast",power:"star"},
-    {label:"400 coins",   coins:400}
+    {label:"300 coins",   coins:300},
+    {label:"1 Pinball",   power:"ball"},
+    {label:"400 coins",   coins:400},
+    {label:"500 coins",   coins:500}
   ];
 
   function claimedToday(){ return save.dailyDay === todayKey(); }
