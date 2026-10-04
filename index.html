@@ -2061,7 +2061,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 83;
+var GAME_BUILD = 84;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -3661,6 +3661,10 @@ function paint(){
       if (Math.abs(t.dy) < 0.7){ t.dy = 0; t.squash = 1; }
       else moving = true;
     }
+    var hintOn = b.hint && !b.busy &&
+        ((b.hint[0] === r2 && b.hint[1] === c2) ||
+         (b.hint[2] === r2 && b.hint[3] === c2));
+    var hintK = hintOn ? 1 + 0.17 * Math.sin(pulseNow / 170) : 1;
     if (t.squash > 0.05){ t.squash *= 0.78; moving = true; } else t.squash = 0;
     if (t.scale < 1){ t.scale = Math.min(1, t.scale + 0.14); moving = true; }
     var sel = b.sel && b.sel.r===r2 && b.sel.c===c2;
@@ -3689,13 +3693,11 @@ function paint(){
       drawTile(cx, t.t,
         ox + c2*cell + cell/2,
         oy + r2*cell + cell/2 - t.dy,
-        cell*0.40*t.scale*(sel?1.14:1)*pulse, t.scale, t.sp);
+        cell*0.40*t.scale*(sel?1.14:1)*pulse*hintK, t.scale, t.sp);
     }
     cx.shadowBlur = 0;
-    if (b.hint && !b.busy &&
-        ((b.hint[0] === r2 && b.hint[1] === c2) ||
-         (b.hint[2] === r2 && b.hint[3] === c2))){
-      var hgl = 0.5 + 0.5 * Math.sin(pulseNow / 150);
+    if (hintOn){
+      var hgl = 0.5 + 0.5 * Math.sin(pulseNow / 170);
       cx.globalAlpha = 0.5 + hgl * 0.5;
       cx.strokeStyle = "#FFF6C9"; cx.lineWidth = 4;
       cx.shadowColor = "#FFE08A"; cx.shadowBlur = 10 + hgl * 8;
