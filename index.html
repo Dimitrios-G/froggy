@@ -520,6 +520,19 @@ body{font-family:var(--font); background:#08131F;
 }
 .pchip img{width:14px; height:14px; object-fit:contain}
 .pchip svg{width:14px; height:14px}
+#fanchat{
+  position:absolute; left:8px; bottom:10px; z-index:5;
+  display:flex; flex-direction:column; gap:5px; align-items:flex-start;
+  max-width:68%; pointer-events:none;
+}
+.fanmsg{
+  background:rgba(18,42,71,.8); border-radius:14px; padding:5px 11px;
+  color:#fff; font-size:11px; font-weight:800; line-height:1.3;
+  animation:fanin .25s ease; box-shadow:0 2px 6px rgba(0,0,0,.25);
+}
+.fanmsg b{color:#8FE3FF; margin-right:4px; font-weight:900}
+.fanmsg.out{transition:all .5s ease; opacity:0; transform:translateY(-14px)}
+@keyframes fanin{from{opacity:0; transform:translateY(12px) scale(.9)}}
 #lvlTag{
   position:absolute; z-index:4; top:8px; left:10px;
   padding:5px 12px; border-radius:999px;
@@ -1376,6 +1389,7 @@ input[type=range]::-moz-range-thumb{
     </div>
     <div id="board"><canvas id="bc"></canvas>
       <div id="lvlTag">LEVEL 1</div>
+      <div id="fanchat"></div>
       <div id="playWallet">
         <span class="pchip"><svg width="24" height="24" viewBox="0 -960 960 960" fill="#FF5E7E"><path d="m480-120-58-52q-101-91-167-157T150-447.5Q111-500 95.5-544T80-634q0-94 63-157t157-63q52 0 99 22t81 62q34-40 81-62t99-22q94 0 157 63t63 157q0 46-15.5 90T810-447.5Q771-395 705-329T538-172l-58 52Zm0-108q96-86 158-147.5t98-107q36-45.5 50-81t14-70.5q0-60-40-100t-100-40q-47 0-87 26.5T518-680h-76q-15-41-55-67.5T300-774q-60 0-100 40t-40 100q0 35 14 70.5t50 81q36 45.5 98 107T480-228Zm0-273Z"/></svg><b class="wLives">5</b></span>
         <span class="pchip"><img data-art="coins" alt=""><b class="wCoins">0</b></span>
@@ -2037,7 +2051,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 78;
+var GAME_BUILD = 79;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -2088,19 +2102,20 @@ var save = (function(){
       chestProg: s.chestProg | 0,
       powerModel: s.powerModel | 0,
       claimedWeek: s.claimedWeek | 0,
-      boosters: s.boosters || {star:1, wave:1, hammer:1, life:1, boost:1, ball:1}
+      boosters: s.boosters || {star:1, wave:1, hammer:1, boost:1, ball:1}
     };
   }catch(e){
     return {coins:0, gems:0, lives:5, livesAt:0, level:1, stars:{}, seen:{}, skin:"classic", skins:["classic"],
             missionDay:"", missions:null, chests:[0,0,0], dailyDay:"", dailyStreak:0, audioBuild:0, musicVol:40, sfxVol:100, muted:0,
             followers:0, volFixed:0, rankClaimed:0, weekKey:"", weekMissions:null, feed:[], playerName:"", best:0,
-            outfits:[], worn:{}, looks:[], look:"classic", feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:2, boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
+            outfits:[], worn:{}, looks:[], look:"classic", feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:3, boosters:{star:1, wave:1, hammer:1, boost:1, ball:1}};
   }
 })();
 function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(save)); }catch(e){} }
 // the old faucets left mountains of power ups: one-time trim to 2 each
-if (save.powerModel !== 2){
-  save.powerModel = 2;
+if (save.powerModel !== 3){
+  save.powerModel = 3;
+  if (save.boosters) delete save.boosters.life;
   Object.keys(save.boosters || {}).forEach(function(k){
     save.boosters[k] = Math.min(1, save.boosters[k] | 0);
   });
@@ -2193,7 +2208,7 @@ function makeLevel(n){
   };
 }
 
-var TOTAL_LEVELS = 300;
+var TOTAL_LEVELS = 500;
 var LEVELS = [];
 for (var li = 1; li <= TOTAL_LEVELS; li++) LEVELS.push(makeLevel(li));
 
@@ -2687,9 +2702,11 @@ function resolve(b, done){
   });
 
   if (b.combo > 1) floatText(b, W/2, H*0.32, "COMBO x"+b.combo, "#FFC93C");
+  if (b.combo >= 3) fanSay("combo");
+  if (keys.length >= 12) fanSay("big");
   if (b.combo >= 4 || keys.length >= 14) setTimeout(function(){ captureClip(b); }, 120);
 
-  if (specials.length) SFX.special();
+  if (specials.length){ SFX.special(); fanSay("special"); }
   if (specials.some(function(x){ return x.sp === 4; }))
     floatText(b, W/2, H*0.28, "BOMB MADE!", "#C08BFF");
   if (specials.some(function(x){ return x.sp === 1 || x.sp === 2; }))
@@ -3024,6 +3041,7 @@ function cellAt(px,py){
   return inside(r,c) ? {r:r,c:c} : null;
 }
 cv.addEventListener("pointerdown", function(e){
+  hintTouch();
   if (!B || B.busy || B.over) return;
   var rect = cv.getBoundingClientRect();
   var p = cellAt(e.clientX-rect.left, e.clientY-rect.top);
@@ -3148,7 +3166,6 @@ var POWERS = [
   {k:"star",   label:"STAR BLAST",     tile:3, hint:"Clears all stars from the board"},
   {k:"wave",   label:"BUBBLE WAVE",    tile:2, hint:"Clears a row or column"},
   {k:"hammer", label:"CRYSTAL HAMMER", tile:5, hint:"Smashes a gem or obstacle"},
-  {k:"life",   label:"EXTRA LIFE",     tile:4, hint:"Gives you an extra life"},
   {k:"boost",  label:"FROG BOOST",     tile:0, hint:"Turns a frog into a booster"},
   {k:"ball",   label:"PINBALL",        tile:3, hint:"Fires a ball that ricochets and smashes tiles"}
 ];
@@ -3374,6 +3391,8 @@ function paintGoals(b, force){
 }
 
 function checkEnd(b){
+  hintLastAct = Date.now();
+  if (b.hint) b.hint = null;
   if (b.over || b.frenzy) return;
   if (goalsDone(b)){
     if (b.moves > 0){
@@ -3495,6 +3514,74 @@ function finish(b, won){
   }
 }
 
+/* =====================================================================
+   THE LIVE CHAT - every level plays like a stream: the fans react to
+   combos, blasts and frenzies in little bubbles on the board.
+   ===================================================================== */
+var FAN_NAMES = ["tadpole_timmy", "lilyqueen", "bugfan99", "madame_stork",
+  "king_toad_1979", "dragonfly.fan", "croak_lord", "swampgirl22",
+  "pond_police", "flysnack", "turtle_slowmo", "heron_hater"];
+var FAN_POOLS = {
+  hello:  ["froggy is LIVE \ud83d\udd34", "FIRST!!", "yesss new stream \ud83d\udc38",
+           "we eating today chat?", "lets gooo"],
+  combo:  ["COMBO \ud83d\udd25", "clean!!", "cracked fr", "W move", "sheeesh"],
+  big:    ["THE WHOLE BOARD??", "CLIP IT \ud83c\udfac", "no way \ud83d\ude31",
+           "chat is this real", "actual insanity"],
+  special:["oooh shiny \u2728", "save it!!", "big brain \ud83e\udde0", "cooking rn"],
+  frenzy: ["FRENZY LETS GOOO \ud83d\udd25\ud83d\udd25", "BEST STREAM EVER",
+           "\ud83d\udc38\ud83d\udc38\ud83d\udc38\ud83d\udc38", "MY SCREEN IS EXPLODING"],
+  hint:   ["psst... look there \ud83d\udc40", "chat sees a move", "right there!!"]
+};
+var fanLast = 0;
+function fanSay(kind, force){
+  var box = $("fanchat");
+  if (!box) return;
+  var now = Date.now();
+  if (!force && now - fanLast < 1400) return;
+  fanLast = now;
+  var pool = FAN_POOLS[kind] || FAN_POOLS.combo;
+  var d = document.createElement("div");
+  d.className = "fanmsg";
+  d.innerHTML = "<b>" + FAN_NAMES[(Math.random()*FAN_NAMES.length)|0] + "</b>" +
+                pool[(Math.random()*pool.length)|0];
+  box.appendChild(d);
+  while (box.children.length > 3) box.removeChild(box.firstChild);
+  setTimeout(function(){ d.classList.add("out"); }, 2600);
+  setTimeout(function(){ if (d.parentNode) d.parentNode.removeChild(d); }, 3150);
+}
+
+/* =====================================================================
+   IDLE HINTS - sit still for six seconds and the game quietly points
+   at a playable move.
+   ===================================================================== */
+var hintLastAct = Date.now();
+function hintTouch(){
+  hintLastAct = Date.now();
+  if (B) B.hint = null;
+}
+function hintMoves(b){
+  var out = [];
+  for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++){
+    if (b.ice && b.ice[r][c]) continue;
+    if (c+1 < COLS && !(b.ice && b.ice[r][c+1]) && wouldMatch(b, r, c, r, c+1))
+      out.push([r, c, r, c+1]);
+    if (r+1 < ROWS && !(b.ice && b.ice[r+1][c]) && wouldMatch(b, r, c, r+1, c))
+      out.push([r, c, r+1, c]);
+  }
+  return out;
+}
+setInterval(function(){
+  var b = B;
+  if (!b || b.busy || b.over || b.frenzy || b.hint) return;
+  if (!$("play").classList.contains("on")) return;
+  if (Date.now() - hintLastAct < 6000) return;
+  var mv = hintMoves(b);
+  if (!mv.length) return;
+  b.hint = mv[(Math.random() * mv.length) | 0];
+  fanSay("hint", true);
+  render();
+}, 1000);
+
 /* ---------- rendering ---------- */
 var rafOn = false;
 function render(){
@@ -3546,6 +3633,7 @@ function paint(){
   b.lastPaint = now;
   var ballsAlive = stepBalls(b, dt);
 
+  if (b.hint) render();
   var moving = false, hasSpecials = false;
   var pulseNow = performance.now();
   for (var r2=0;r2<ROWS;r2++) for (var c2=0;c2<COLS;c2++){
@@ -3587,6 +3675,17 @@ function paint(){
         cell*0.40*t.scale*(sel?1.14:1)*pulse, t.scale, t.sp);
     }
     cx.shadowBlur = 0;
+    if (b.hint && !b.busy &&
+        ((b.hint[0] === r2 && b.hint[1] === c2) ||
+         (b.hint[2] === r2 && b.hint[3] === c2))){
+      var hgl = 0.5 + 0.5 * Math.sin(pulseNow / 150);
+      cx.globalAlpha = 0.5 + hgl * 0.5;
+      cx.strokeStyle = "#FFF6C9"; cx.lineWidth = 4;
+      cx.shadowColor = "#FFE08A"; cx.shadowBlur = 10 + hgl * 8;
+      roundRect(cx, ox+c2*cell+3, oy+r2*cell+3, cell-6, cell-6, 11);
+      cx.stroke();
+      cx.shadowBlur = 0; cx.globalAlpha = 1;
+    }
     if (b.ice && b.ice[r2] && b.ice[r2][c2] > 0){
       var zx = ox + c2*cell, zy = oy + r2*cell - t.dy;
       cx.fillStyle = "rgba(200,235,255,.5)";
@@ -3927,7 +4026,7 @@ var SHOP_LIVES  = [{lives:1, gems:2}, {lives:3, gems:5}, {lives:5, gems:9, best:
 var SHOP_POWERS = [
   {k:"hammer", n:3, coins:150}, {k:"wave",  n:3, coins:220},
   {k:"star",   n:3, coins:260}, {k:"ball",  n:3, coins:300},
-  {k:"boost",  n:2, coins:340}, {k:"life",  n:2, coins:400}
+  {k:"boost",  n:2, coins:340}
 ];
 var SHOP_CHESTS = [
   {k:"lucky",  name:"LUCKY CHEST",  coins:2500},
@@ -4849,6 +4948,8 @@ function captureClip(b){
 }
 
 function startFrenzy(b){
+  fanSay("frenzy", true);
+  setTimeout(function(){ fanSay("frenzy", true); }, 900);
   b.busy = true;
   b.starsMoves = b.moves;          // stars and the moves bonus keep the
                                    // count the player actually earned
@@ -5312,6 +5413,8 @@ function startLevel(){
     (list || []).forEach(function(m){ B.missionSnap.push({k:m.k, text:m.text, got:m.got}); });
   });
   paintMoves(B); paintGoals(B); paintPowers();
+  hintLastAct = Date.now();
+  setTimeout(function(){ fanSay("hello", true); }, 1600);
   if (!save.sawHelp){
     save.sawHelp = 1; persist();
     setTimeout(function(){ buildHelp(); $("ovHelp").classList.add("on"); }, 500);
@@ -5452,7 +5555,7 @@ function feastLand(){
     if (Math.hypot(be.x - pd.x, be.y - (pd.y - 36)) < 78){
       be.dead = 1; got++;
       if (be.gold){
-        var ks = ["star","wave","hammer","life","boost","ball"];
+        var ks = ["star","wave","hammer","boost","ball"];
         var k = ks[(Math.random()*ks.length)|0];
         save.boosters[k] = (save.boosters[k] || 0) + 1;
         F.items.push(k);
@@ -5764,8 +5867,8 @@ all(".tab").forEach(function(t){
                  dailyDay:"", dailyStreak:0, musicStep:2, volFixed:2,
                  musicVol:25, sfxVol:100, muted:0, audioBuild:AUDIO_BUILD,
                  weekKey:"", weekMissions:null, playerName:"", best:0, outfits:[], worn:{}, looks:[], look:"classic",
-                 rankClaimed:0, followers:0, best:0, feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:2,
-                 boosters:{star:1, wave:1, hammer:1, life:1, boost:1, ball:1}};
+                 rankClaimed:0, followers:0, best:0, feasts:{}, offerDay:"", claimedToday:0, claimedWeek:0, chestModel:3, chestProg:0, powerModel:3,
+                 boosters:{star:1, wave:1, hammer:1, boost:1, ball:1}};
     Object.keys(save).forEach(function(k){ delete save[k]; });
     Object.keys(fresh).forEach(function(k){ save[k] = fresh[k]; });
     persist();
