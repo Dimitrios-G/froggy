@@ -2061,7 +2061,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 85;
+var GAME_BUILD = 86;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -3751,10 +3751,12 @@ function paint(){
 
   b.fx = b.fx.filter(function(f){
     if (f.life0 == null) f.life0 = f.life;
-    f.life -= (f.kind === "blast" ? 0.018
-             : f.kind === "line"  ? 0.022
-             : f.kind === "pop"   ? 0.026
-             : 0.045);
+    f.life -= (f.kind === "blast" ? 0.011
+             : f.kind === "line"  ? 0.014
+             : f.kind === "pop"   ? 0.015
+             : f.kind === "flash" ? 0.05
+             : f.kind === "streak"? 0.03
+             : 0.026);
     if (f.life <= 0) return false;
     var lifeK = f.life / f.life0;
     if (f.kind === "pop"){
