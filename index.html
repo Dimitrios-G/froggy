@@ -1188,7 +1188,7 @@ input[type=range]::-moz-range-thumb{
     </div>
 
     <div class="hticker viralrow" id="homeViral" style="display:none">
-      <div class="htico">\U0001F525</div>
+      <div class="htico">🔥</div>
       <div class="htbody">
         <u>VIRAL CHALLENGE</u>
         <b id="hvText">This week: BOMB PARTY</b>
@@ -1539,7 +1539,7 @@ input[type=range]::-moz-range-thumb{
       <div class="goalgrid" id="endGoals"></div>
       <div class="stmiss" id="endMissions"></div>
       <div class="btn gold" id="btnClaimGo" style="display:none"><span>COLLECT MISSION PRIZE!</span></div>
-      <div class="btn blue" id="btnShare" style="display:none"><span>SHARE THE WIN \U0001F4E3</span></div>
+      <div class="btn blue" id="btnShare" style="display:none"><span>SHARE THE WIN 📣</span></div>
       <div class="btn" id="btnNext"><span>Next level</span></div>
       <div class="ghost" id="btnHome">Back to map</div>
     </div>
@@ -2104,7 +2104,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 88;
+var GAME_BUILD = 89;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -2555,9 +2555,9 @@ function findRuns(b){
   for (var r=0;r<ROWS;r++){
     var c=0;
     while (c<COLS){
-      if (!b.g[r][c]){ c++; continue; }
+      if (!b.g[r][c] || b.g[r][c].sp === 3){ c++; continue; }
       var t=b.g[r][c].t, k=c+1;
-      while (k<COLS && b.g[r][k] && b.g[r][k].t===t) k++;
+      while (k<COLS && b.g[r][k] && b.g[r][k].t===t && b.g[r][k].sp !== 3) k++;
       if (k-c>=3){ var cells=[]; for(var i=c;i<k;i++) cells.push([r,i]);
                    runs.push({cells:cells, dir:"h", t:t}); }
       c=k;
@@ -2566,9 +2566,9 @@ function findRuns(b){
   for (var c2=0;c2<COLS;c2++){
     var r2=0;
     while (r2<ROWS){
-      if (!b.g[r2][c2]){ r2++; continue; }
+      if (!b.g[r2][c2] || b.g[r2][c2].sp === 3){ r2++; continue; }
       var t2=b.g[r2][c2].t, k2=r2+1;
-      while (k2<ROWS && b.g[k2][c2] && b.g[k2][c2].t===t2) k2++;
+      while (k2<ROWS && b.g[k2][c2] && b.g[k2][c2].t===t2 && b.g[k2][c2].sp !== 3) k2++;
       if (k2-r2>=3){ var cl=[]; for(var j=r2;j<k2;j++) cl.push([j,c2]);
                      runs.push({cells:cl, dir:"v", t:t2}); }
       r2=k2;
