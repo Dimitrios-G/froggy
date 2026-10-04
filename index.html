@@ -2061,7 +2061,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 82;
+var GAME_BUILD = 83;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -2643,7 +2643,9 @@ function resolve(b, done){
       specials.push({r:m[0], c:m[1], sp:3, t:run.t});
     } else if (run.cells.length === 4){
       var m4 = run.cells[1];
-      specials.push({r:m4[0], c:m4[1], sp: run.dir==="h"?1:2, t:run.t});
+      // the tongue follows the SWIPE: a vertical run is usually closed
+      // by a horizontal drag, so it pays out a horizontal tongue
+      specials.push({r:m4[0], c:m4[1], sp: run.dir==="h"?2:1, t:run.t});
     }
   });
 
