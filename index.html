@@ -2061,7 +2061,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 86;
+var GAME_BUILD = 87;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -2817,7 +2817,7 @@ function comboKind(a, b){
 
 // the storm in two acts: every tile of the colour TURNS INTO the
 // special first, one by one, and then they all fire in a chain
-function fireStorm(b, kind, r, c, colourA, colourB){
+function fireStorm(b, kind, r, c, colourA, colourB, partnerSp){
   var colour = (colourA === 3 || colourA === colourB) ? colourB : colourA;
   var spots = [];
   for (var rr = 0; rr < ROWS; rr++) for (var cc = 0; cc < COLS; cc++){
@@ -2843,7 +2843,7 @@ function fireStorm(b, kind, r, c, colourA, colourB){
     setTimeout(function(){
       var t = b.g[pos[0]][pos[1]];
       if (t && t.t === colour && !t.sp){
-        t.sp = kind === "fly_tongue" ? (i % 2 ? 2 : 1) : 4;
+        t.sp = partnerSp || (kind === "fly_tongue" ? 1 : 4);
         t.scale = 0.25;
         SFX.tap();
         render();
@@ -3115,8 +3115,9 @@ function trySwap(r1,c1,r2,c2){
     if (kind === "fly_tongue" || kind === "fly_bomb"){
       b.busy = true; b.moves--; paintMoves(b); SFX.swap();
       var sca = a.t, scb = d.t;
+      var partnerSp = a.sp === 3 ? d.sp : a.sp;
       b.g[r1][c1] = null; b.g[r2][c2] = null;
-      fireStorm(b, kind, r2, c2, sca, scb);
+      fireStorm(b, kind, r2, c2, sca, scb, partnerSp);
       return;
     }
     if (kind){
@@ -3751,12 +3752,12 @@ function paint(){
 
   b.fx = b.fx.filter(function(f){
     if (f.life0 == null) f.life0 = f.life;
-    f.life -= (f.kind === "blast" ? 0.011
-             : f.kind === "line"  ? 0.014
-             : f.kind === "pop"   ? 0.015
+    f.life -= (f.kind === "blast" ? 0.009
+             : f.kind === "line"  ? 0.012
+             : f.kind === "pop"   ? 0.013
              : f.kind === "flash" ? 0.05
-             : f.kind === "streak"? 0.03
-             : 0.026);
+             : f.kind === "streak"? 0.026
+             : 0.022);
     if (f.life <= 0) return false;
     var lifeK = f.life / f.life0;
     if (f.kind === "pop"){
