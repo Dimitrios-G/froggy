@@ -2181,7 +2181,7 @@ var playCroak = (function(){
 })();
 
 /* ---------------- save ---------------- */
-var GAME_BUILD = 92;
+var GAME_BUILD = 93;
 var KEY = "froggy_m3_v2";
 var save = (function(){
   try{
@@ -2677,12 +2677,16 @@ function makeBoard(level){
     var iseed = (level.n * 48271 + 7) % 2147483647;
     function irand(){ iseed = (iseed * 16807) % 2147483647; return iseed / 2147483647; }
     var iput = 0, iguard = 0;
+    function iceCorner(r, c){ return (r === 0 || r === ROWS - 1) && (c === 0 || c === COLS - 1); }
     while (iput < level.ice && iguard++ < 400){
       var zr = (irand() * ROWS) | 0, zc = (irand() * COLS) | 0;
       if (b.ice[zr][zc]) continue;
       if ((zr === 0 || zr === ROWS - 1) && (zc === 0 || zc === COLS - 1)) continue;
       b.ice[zr][zc] = 1; iput++;
     }
+    for (var gr = 0; gr < ROWS && iput < level.ice; gr++)
+      for (var gc = 0; gc < COLS && iput < level.ice; gc++)
+        if (!b.ice[gr][gc] && !iceCorner(gr, gc)){ b.ice[gr][gc] = 1; iput++; }
   }
   if (level.honey){
     b.honey = [];
@@ -2691,19 +2695,23 @@ function makeBoard(level){
       for (var hc = 0; hc < COLS; hc++) b.honey[hr][hc] = 0;
     }
     // seeded by the level number, so the same level always looks the same
-    var hseed = (level.n * 2654435761) % 2147483647;
+    var hseed = (((level.n || 977) * 2654435761) % 2147483647) || 12345;
     function hrand(){ hseed = (hseed * 48271) % 2147483647; return hseed / 2147483647; }
     var placed = 0, hguard = 0;
+    function cornerCell(r, c){ return (r === 0 || r === ROWS - 1) && (c === 0 || c === COLS - 1); }
     while (placed < level.honey && hguard++ < 400){
       var yr = (hrand() * ROWS) | 0, yc = (hrand() * COLS) | 0;
       if (b.honey[yr][yc]) continue;
       if ((yr === 0 || yr === ROWS - 1) && (yc === 0 || yc === COLS - 1)) continue;
       b.honey[yr][yc] = level.honeyLayers; placed++;
       var mc = COLS - 1 - yc;
-      if (placed < level.honey && !b.honey[yr][mc]){
+      if (placed < level.honey && !b.honey[yr][mc] && !cornerCell(yr, mc)){
         b.honey[yr][mc] = level.honeyLayers; placed++;
       }
     }
+    for (var fr = 0; fr < ROWS && placed < level.honey; fr++)
+      for (var fc = 0; fc < COLS && placed < level.honey; fc++)
+        if (!b.honey[fr][fc] && !cornerCell(fr, fc)){ b.honey[fr][fc] = level.honeyLayers || 1; placed++; }
   }
 
   if (level.slime){
@@ -3364,7 +3372,8 @@ cv.addEventListener("pointerdown", function(e){
   hintTouch();
   if (!B || B.busy || B.over) return;
   var rect = cv.getBoundingClientRect();
-  var p = cellAt(e.clientX-rect.left, e.clientY-rect.top);
+  var p = cellAt((e.clientX-rect.left) * (W / (rect.width || W)),
+                 (e.clientY-rect.top)  * (H / (rect.height || H)));
   if (!p) return;
   if (B.armed){ useBooster(p); return; }
 
@@ -3696,7 +3705,11 @@ function paintMoves(b){
 function paintGoals(b, force){
   var strip = $("goalStrip");
   var topbar = document.querySelector("#play .playtop");
-  if (topbar) topbar.classList.toggle("many", b.need.length >= 3);
+  var wantMany = b.need.length >= 3;
+  if (topbar && topbar.classList.contains("many") !== wantMany){
+    topbar.classList.toggle("many", wantMany);
+    if (b === B) resize();            // the board just changed height: re-measure the cells
+  }
   // rebuild when the count OR the tile types differ from what is on screen
   var stale = strip.children.length !== b.need.length ||
     b.need.some(function(g, i){
@@ -3972,7 +3985,7 @@ var customLevel = null;
 var VIRAL_TWISTS = [
   {k:"bombs",  name:"BOMB PARTY",   desc:"The board opens loaded with bombs."},
   {k:"honey",  name:"HONEY FLOOD",  desc:"Honey everywhere. Lick it all."},
-  {k:"frozen", name:"FROZEN POND",  desc:"Ten tiles locked in ice."},
+  {k:"frozen", name:"FROZEN POND",  desc:"Eight tiles locked in ice."},
   {k:"speed",  name:"SPEED RUN",    desc:"Fifteen moves. Make them count."}
 ];
 function viralTwist(){
@@ -3987,10 +4000,14 @@ function makeViralLevel(){
   lv.n = 0; lv.viral = true; lv.name = tw.name; lv.boss = false;
   lv.honey = 0; lv.ice = 0; lv.troll = 0; lv.slime = 0; lv.preSpecials = 0;
   lv.goals = lv.goals.filter(function(g){ return g.t !== "h" && g.t !== "i" && g.t !== "t" && g.t !== "s"; });
+  // the colour goals shrink to fit the twist, so it is hard but fair
+  function shrink(k){
+    lv.goals.forEach(function(g){ if (typeof g.t === "number") g.n = Math.max(8, Math.round(g.n * k)); });
+  }
   if (tw.k === "bombs")  lv.preSpecials = 6;
-  if (tw.k === "honey"){ lv.honey = 12; lv.goals.push({t:"h", n:12}); }
-  if (tw.k === "frozen"){ lv.ice = 10; lv.goals.push({t:"i", n:10}); }
-  if (tw.k === "speed")  lv.moves = 15;
+  if (tw.k === "honey"){ lv.honey = 10; lv.honeyLayers = 1; lv.goals.push({t:"h", n:10}); shrink(0.8); }
+  if (tw.k === "frozen"){ lv.ice = 8; lv.goals.push({t:"i", n:8}); shrink(0.8); }
+  if (tw.k === "speed"){ shrink(15 / lv.moves * 0.95); lv.moves = 15; }
   return lv;
 }
 function paintViralRow(){
